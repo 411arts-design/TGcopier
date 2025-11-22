@@ -1,0 +1,161 @@
+import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:http/http.dart' as http;
+
+void main() {
+  runApp(const TGCopierApp());
+}
+
+class TGCopierApp extends StatelessWidget {
+  const TGCopierApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: "TGcopier",
+      theme: ThemeData(primarySwatch: Colors.red),
+      home: const HomeScreen(),
+    );
+  }
+}
+
+class HomeScreen extends StatefulWidget {
+  const HomeScreen({super.key});
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  List<String> logs = [];
+
+  void addLog(String msg) {
+    setState(() => logs.insert(0, msg));
+  }
+
+  Future<void> testServer() async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    String url = prefs.getString("server") ?? "";
+
+    if (url.isEmpty) {
+      addLog("❌ No MT5 server URL saved");
+      return;
+    }
+
+    try {
+      final res = await http.get(Uri.parse("$url/ping"));
+      if (res.statusCode == 200) {
+        addLog("✅ MT5 server connected!");
+      } else {
+        addLog("❌ Server error");
+      }
+    } catch (e) {
+      addLog("❌ Connection failed");
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text("TGcopier")),
+      drawer: Drawer(
+        child: ListView(
+          children: [
+            const DrawerHeader(
+              decoration: BoxDecoration(color: Colors.red),
+              child: Text("TGcopier", style: TextStyle(color: Colors.white)),
+            ),
+            ListTile(
+              title: const Text("Settings"),
+              onTap: () {
+                Navigator.push(context,
+                    MaterialPageRoute(builder: (_) => SettingsPage()));
+              },
+            ),
+          ],
+        ),
+      ),
+      body: Column(
+        children: [
+          ElevatedButton(
+              onPressed: testServer, child: const Text("Test MT5 Server")),
+          Expanded(
+            child: ListView.builder(
+              itemCount: logs.length,
+              itemBuilder: (context, i) => ListTile(title: Text(logs[i])),
+            ),
+          )
+        ],
+      ),
+    );
+  }
+}
+
+class SettingsPage extends StatefulWidget {
+  @override
+  State<SettingsPage> createState() => _SettingsPageState();
+}
+
+class _SettingsPageState extends State<SettingsPage> {
+  final bot = TextEditingController();
+  final chat = TextEditingController();
+  final server = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    load();
+  }
+
+  Future<void> load() async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    bot.text = prefs.getString("tg_bot") ?? "";
+    chat.text = prefs.getString("tg_chat") ?? "";
+    server.text = prefs.getString("server") ?? "";
+  }
+
+  Future<void> save() async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    await prefs.setString("tg_bot", bot.text);
+    await prefs.setString("tg_chat", chat.text);
+    await prefs.setString("server", server.text);
+
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text("Saved!")));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text("Settings")),
+      body: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            TextField(
+              controller: bot,
+              decoration: const InputDecoration(
+                labelText: "Telegram Bot Token",
+              ),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: chat,
+              decoration: const InputDecoration(
+                labelText: "Telegram Group ID",
+              ),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: server,
+              decoration: const InputDecoration(
+                labelText: "MT5 Server URL",
+              ),
+            ),
+            const SizedBox(height: 24),
+            ElevatedButton(onPressed: save, child: const Text("Save")),
+          ],
+        ),
+      ),
+    );
+  }
+}
